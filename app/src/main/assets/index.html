@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>N'TurboBoost</title>
+<style>
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:#000;color:#f4f4f5;font-family:system-ui,-apple-system,Roboto,sans-serif}
+#app{max-width:440px;margin:0 auto;min-height:100vh;padding:24px 20px 120px}
+h1{font-size:20px;margin:8px 0 16px;display:flex;justify-content:space-between;align-items:center}
+.n{color:#00E676}
+.card{background:#0a0a0a;border:1px solid #1a1a1a;border-radius:16px;padding:16px;margin-bottom:16px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.muted{color:#a1a1aa;font-size:13px;margin:0}
+.center{text-align:center}
+.big{font-size:40px;font-weight:700;font-variant-numeric:tabular-nums;margin:8px 0}
+.val{font-size:18px;font-weight:600;font-variant-numeric:tabular-nums;margin:4px 0 0}
+.hdr{font-size:12px;font-weight:400;font-variant-numeric:tabular-nums}
+.btn{width:100%;padding:16px;border:0;border-radius:16px;background:#00E676;color:#000;font-weight:700;font-size:16px;box-shadow:0 0 20px #00E67666;margin-bottom:12px;display:flex;align-items:center;justify-content:center;gap:8px}
+.btn:disabled{opacity:.5}
+.ghost{background:none;border:1px solid #ff5252aa;color:#ff8a80;border-radius:10px;padding:6px 12px;font-size:14px}
+.ghost:disabled{opacity:.4}
+.pick{background:none;border:1px solid #00E676;color:#00E676;border-radius:12px;padding:12px;font-size:15px;font-weight:600;width:100%;margin-bottom:12px}
+.row{display:flex;justify-content:space-between;align-items:center;padding:8px 0}
+.bar{height:8px;background:#1a1a1a;border-radius:99px;overflow:hidden;margin:8px 0}
+.bar>div{height:100%;background:#00E676;transition:width .1s}
+.banner-box{width:100%;height:160px;border-radius:12px;overflow:hidden;background:#111;display:flex;align-items:center;justify-content:center;margin-bottom:12px}
+.banner-box img{width:100%;height:100%;object-fit:cover}
+.avatar{width:120px;height:120px;border-radius:50%;margin:8px auto 16px;background:#111;border:2px solid #00E676;overflow:hidden;display:flex;align-items:center;justify-content:center}
+.avatar img{width:100%;height:100%;object-fit:cover}
+.field{width:100%;background:#000;border:1px solid #262626;color:#f4f4f5;border-radius:12px;padding:12px;font-size:16px;margin-top:4px;outline:none}
+.field:focus{border-color:#00E676}
+.banner{background:#111;border-radius:12px;padding:10px 14px;font-size:13px;margin-bottom:16px;color:#fbbf24}
+nav{position:fixed;bottom:0;left:0;right:0;max-width:440px;margin:0 auto;background:#000;border-top:1px solid #1a1a1a;display:flex;justify-content:space-around;padding:10px 0}
+nav button{background:none;border:0;color:#71717a;font-size:11px;display:flex;flex-direction:column;align-items:center;gap:4px;padding:0 2px}
+nav button.on{color:#00E676}
+nav button:disabled{opacity:.4}
+.toast{position:fixed;top:20px;left:50%;transform:translateX(-50%);width:90%;max-width:400px;background:#111;border:1px solid #00E67666;border-radius:12px;padding:12px 16px;font-size:14px;z-index:9}
+.err{color:#ff8a80;white-space:pre-wrap;font-size:12px}
+input[type=checkbox]{width:20px;height:20px;accent-color:#00E676}
+</style>
+</head>
+<body>
+<div id="app"><p class="muted">Carregando...</p></div>
+<input type="file" id="bannerIn" accept="image/*" hidden>
+<input type="file" id="avatarIn" accept="image/*" hidden>
+
+<script>
+try {
+const NATIVE = typeof window.Android !== "undefined";
+const NEON = "#00E676", WARN = "#FF9100", DANGER = "#FF1744", CIRC = 2 * Math.PI * 90;
+
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const rnd = (a, b) => a + Math.random() * (b - a);
+const sum = (a, f) => a.reduce((t, x) => t + f(x), 0);
+const colorFor = p => (p > 90 ? DANGER : p > 80 ? WARN : NEON);
+const scoreColor = s => (s >= 70 ? NEON : s >= 40 ? WARN : DANGER);
+const fmt = mb => (mb >= 1024 ? (mb / 1024).toFixed(1) + " GB" : Math.round(mb) + " MB");
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+const ICON = {
+  home: "M3 10l9-7 9 7v10a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z",
+  ram: "M4 7h16v10H4zM8 17v3M12 17v3M16 17v3M8 4v3M12 4v3M16 4v3",
+  cache: "M3 20h10M7 20l-4-4 10-10 6 6-7 8",
+  image: "M3 5h18v14H3zM3 16l5-5 4 4 3-3 6 6",
+  user: "M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 21a8 8 0 0 1 16 0",
+  shield: "M12 2l8 3v6c0 5-3.5 9-8 11-4.5-2-8-6-8-11V5z",
+  zap: "M13 2L3 14h9l-1 8 10-12h-9z",
+};
+const ic = (d, s = 22, c = "currentColor") =>
+  `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="${c}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="${d}"/></svg>`;
+
+const lsGet = k => { try { return localStorage.getItem(k); } catch (e) { return null; } };
+const lsSet = (k, v) => {
+  try { if (v) localStorage.setItem(k, v); else localStorage.removeItem(k); }
+  catch (e) { notify("Não foi possível salvar (imagem grande demais)"); }
+};
+
+const SIM_PROCS = [["chrome","Chrome",1400],["whatsapp","WhatsApp",720],["instagram","Instagram",510],["youtube","YouTube",430],["spotify","Spotify",260]];
+const makeSimCache = () => [
+  { id: "apps", label: "Cache de Apps", mb: Math.round(rnd(200, 700)) },
+  { id: "temp", label: "Arquivos Temporários", mb: Math.round(rnd(80, 400)) },
+  { id: "trash", label: "Lixeira do Sistema", mb: Math.round(rnd(30, 200)) },
+  { id: "thumbs", label: "Miniaturas", mb: Math.round(rnd(20, 90)) },
+];
+
+let S = {
+  total: 8192, base: 1880, used: 0,
+  procs: SIM_PROCS.map(([id, name, mb]) => ({ id, name, pkg: "", mb })),
+  cache: [], history: Array(40).fill(5200),
+};
+S.used = S.base + sum(S.procs, p => p.mb);
+
+let name = lsGet("tb_name") || "";
+let avatar = lsGet("tb_avatar");
+let banner = lsGet("tb_banner");
+
+let shizukuOn = null, shzState = null, shzErr = "";
+let tab = "home", busy = null, progress = 0, timer = null;
+let selected = new Set(), lastFreed = null, cacheDone = null, scanned = false, lastKey = "";
+
+const calc = () => {
+  const pct = (S.used / S.total) * 100;
+  const cacheTotal = sum(S.cache, c => c.mb);
+  const selMB = sum(S.cache.filter(c => selected.has(c.id)), c => c.mb);
+  const score = Math.round(clamp(100 - Math.max(0, pct - 50) * 1.5 - cacheTotal / 60, 0, 100));
+  return { pct, cacheTotal, selMB, score };
+};
+const pts = () => S.history.map((v, i) => `${(i / (S.history.length - 1)) * 300},${130 - (v / S.total) * 130}`).join(" ");
+
+function notify(msg) {
+  const d = document.createElement("div");
+  d.className = "toast";
+  d.textContent = msg;
+  document.body.appendChild(d);
+  setTimeout(() => d.remove(), 2800);
+}
+
+function setProg(p) {
+  progress = p;
+  const el = document.getElementById("pbar");
+  if (el) el.style.width = p + "%";
+}
+const barFor = kind => (busy === kind ? `<div class="bar"><div id="pbar" style="width:${progress}%"></div></div>` : "");
+
+function begin(kind) {
+  busy = kind; progress = 0; render();
+  clearInterval(timer);
+  timer = setInterval(() => setProg(Math.min(90, progress + (kind === "opt" ? 1.2 : 2.5))), 60);
+}
+function finishBusy(res) {
+  clearInterval(timer);
+  const k = busy;
+  busy = null; progress = 0;
+  if (res) {
+    if (res.freed !== undefined) lastFreed = res.freed;
+    if (res.cleaned) { cacheDone = res.freed; selected = new Set(); }
+  }
+  render();
+  if (res && res.msg) notify(res.msg);
+  if (NATIVE && (k === "cache" || k === "opt")) Android.stats();
+}
+
+function bannerHtml() {
+  if (!NATIVE) return `<div class="banner">Modo simulação: instale o APK e use o Shizuku para dados reais.</div>`;
+  if (shizukuOn !== true) return `<div class="banner">Shizuku não está ativo. Veja o motivo na aba Shizuku.</div>`;
+  return "";
+}
+
+// ---------- Abas ----------
+function home(c) {
+  return `
+  ${banner ? `<img src="${banner}" alt="" style="width:100%;height:120px;object-fit:cover;border-radius:16px;margin-bottom:16px">` : ""}
+  ${name ? `<p class="muted" style="margin-bottom:12px">Olá, ${esc(name)}</p>` : ""}
+  <div class="card center"><p class="muted">Saúde do sistema</p>
+    <p class="big" id="score" style="color:${scoreColor(c.score)}">${c.score}%</p>
+    <div class="bar"><div id="scoreBar" style="width:${c.score}%;background:${scoreColor(c.score)}"></div></div></div>
+  <div class="grid2">
+    <div class="card"><p class="muted">RAM usada</p><p class="val" id="ramHome" style="color:${colorFor(c.pct)}">${(S.used / 1024).toFixed(1)} GB</p></div>
+    <div class="card"><p class="muted">Cache recuperável</p><p class="val" id="cacheHome">${fmt(c.cacheTotal)}</p></div>
+  </div>
+  ${lastFreed !== null ? `<p class="muted center">Último resultado: <span class="n">${fmt(lastFreed)}</span> liberados</p>` : ""}
+  <button class="btn" data-act="opt" ${busy ? "disabled" : ""}>
+    ${busy === "opt" ? "Otimizando..." : `${ic(ICON.zap, 18, "#000")} Otimização em 1 Clique`}
+  </button>
+  ${barFor("opt")}`;
+}
+
+function ram(c) {
+  const col = colorFor(c.pct);
+  const procs = [...S.procs].sort((a, b) => b.mb - a.mb);
+  return `
+  <div style="position:relative;width:224px;height:224px;margin:0 auto">
+    <svg viewBox="0 0 200 200" width="224" height="224" style="transform:rotate(-90deg)">
+      <circle cx="100" cy="100" r="90" stroke="#1a1a1a" stroke-width="14" fill="none"/>
+      <circle id="gauge" cx="100" cy="100" r="90" fill="none" stroke-width="14" stroke-linecap="round"
+        stroke="${col}" stroke-dasharray="${CIRC}" stroke-dashoffset="${CIRC * (1 - c.pct / 100)}"
+        style="transition:stroke-dashoffset .9s ease,stroke .4s"/>
+    </svg>
+    <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center">
+      <span id="pct" style="font-size:40px;font-weight:700;color:${col}">${c.pct.toFixed(1)}%</span>
+      <span class="muted">em uso</span>
+    </div>
+  </div>
+  <p class="center"><span id="usedtxt" style="font-weight:600">${(S.used / 1024).toFixed(1)} GB</span> usados de ${(S.total / 1024).toFixed(1)} GB</p>
+  <div class="card">
+    <svg viewBox="0 0 300 130" width="100%" height="130">
+      <line x1="0" x2="300" y1="97" y2="97" stroke="#1a1a1a" stroke-dasharray="3 4"/>
+      <line x1="0" x2="300" y1="65" y2="65" stroke="#1a1a1a" stroke-dasharray="3 4"/>
+      <line x1="0" x2="300" y1="32" y2="32" stroke="#1a1a1a" stroke-dasharray="3 4"/>
+      <polygon id="area" points="0,130 ${pts()} 300,130" fill="${col}" opacity="0.15"/>
+      <polyline id="line" points="${pts()}" fill="none" stroke="${col}" stroke-width="2.5" stroke-linejoin="round"/>
+    </svg>
+    <p class="muted" style="text-align:right">Atualização automática</p>
+  </div>
+  <div class="card">
+    <p class="muted">Processos com maior consumo</p>
+    ${procs.map(p => `
+      <div class="row">
+        <div><div>${esc(p.name)}</div><div class="muted" id="pm-${esc(p.id)}">${fmt(p.mb)}</div></div>
+        <button class="ghost" data-act="kill" data-pid="${esc(p.id)}" ${busy ? "disabled" : ""}>Encerrar</button>
+      </div>`).join("")}
+    ${S.procs.length === 0 ? `<p class="muted center">Nenhum processo listado.</p>` : ""}
+  </div>
+  <button class="btn" data-act="ram" ${busy ? "disabled" : ""}>
+    ${busy === "ram" ? "Limpando memória..." : "Liberar RAM Agora"}
+  </button>
+  ${barFor("ram")}`;
+}
+
+function cache(c) {
+  let top;
+  if (busy === "scan") {
+    top = `<p class="muted">Escaneando arquivos...</p>${barFor("scan")}`;
+  } else if (NATIVE && shizukuOn !== true) {
+    top = `<p class="muted">Ative o Shizuku para escanear (veja a aba Shizuku)</p>`;
+  } else if (c.cacheTotal === 0) {
+    top = `<p class="muted">Resultado do scan</p>
+      <p style="font-size:24px;font-weight:700" class="n">Sistema limpo</p>
+      <button class="ghost" data-act="scan" ${busy ? "disabled" : ""}>Escanear novamente</button>`;
+  } else {
+    top = `<p class="muted">Espaço recuperável</p>
+      <p class="big n">${fmt(c.cacheTotal)} encontrados</p>`;
+  }
+  let html = `<div class="card center">${top}</div>`;
+  if (cacheDone !== null) {
+    html += `<div class="card" style="border:1px solid #00E67666">
+      <b>✔ Limpeza concluída</b>
+      <p class="muted" style="margin:4px 0 0"><span class="n">${fmt(cacheDone)}</span> de espaço liberado</p></div>`;
+  }
+  if (scanned && c.cacheTotal > 0 && busy !== "scan") {
+    html += `<div class="card">
+      ${S.cache.map(x => `
+        <label class="row" style="cursor:pointer">
+          <span><input type="checkbox" data-cb="${esc(x.id)}" ${selected.has(x.id) ? "checked" : ""} ${busy ? "disabled" : ""}> ${esc(x.label)}</span>
+          <span class="muted">${fmt(x.mb)}</span>
+        </label>`).join("")}
+    </div>
+    <button class="btn" data-act="clean" ${busy || c.selMB === 0 ? "disabled" : ""}>
+      ${busy === "cache" ? "Limpando..." : `Limpar Cache (${fmt(c.selMB)})`}
+    </button>
+    ${barFor("cache")}`;
+  }
+  return html;
+}
+
+function bannerTab() {
+  return `
+  <div class="card">
+    <p class="muted" style="margin-bottom:12px">Banner do início</p>
+    <div class="banner-box">
+      ${banner ? `<img src="${banner}" alt="">` : `<p class="muted">Nenhum banner escolhido</p>`}
+    </div>
+    <button class="pick" data-act="pickBanner">Escolher banner da galeria</button>
+    ${banner ? `<div class="center"><button class="ghost" data-act="rmBanner">Remover banner</button></div>` : ""}
+  </div>
+  <p class="muted center">Recomendado: imagem horizontal, por exemplo 1080 × 400.</p>`;
+}
+
+function profileTab() {
+  return `
+  <div class="card center">
+    <div class="avatar">${avatar ? `<img src="${avatar}" alt="">` : ic(ICON.user, 56, "#52525b")}</div>
+    <button class="pick" data-act="pickAvatar">Escolher foto da galeria</button>
+    <p class="muted" style="text-align:left;margin-top:8px">Seu nome</p>
+    <input id="nameIn" class="field" maxlength="30" placeholder="Digite seu nome" value="${esc(name)}">
+  </div>`;
+}
+
+function shizukuTab() {
+  if (!NATIVE) return `<div class="card center"><p class="muted">O Shizuku só funciona no app instalado (APK), não no navegador.</p></div>`;
+  const st = shzState || "off";
+  const info = {
+    on: [NEON, "Shizuku ativo", "As ações usam dados reais do aparelho."],
+    noperm: [WARN, "Shizuku ligado, sem permissão", "Toque em \"Dar permissão\" e autorize o TurboBoost."],
+    off: [DANGER, "Shizuku desligado", "Abra o app Shizuku e ative-o pela Depuração sem fio. Depois toque em \"Verificar novamente\"."],
+    err: [WARN, "Shizuku ativo, mas erro ao ler dados", shzErr],
+  }[st];
+  return `
+  <div class="card center">
+    <div style="width:16px;height:16px;border-radius:50%;background:${info[0]};margin:8px auto;box-shadow:0 0 12px ${info[0]}"></div>
+    <p style="font-size:18px;font-weight:700;margin:4px 0">${info[1]}</p>
+    <p class="muted">${esc(info[2])}</p>
+  </div>
+  ${st === "noperm" ? `<button class="btn" data-act="perm">Dar permissão</button>` : ""}
+  <button class="pick" data-act="openShz">Abrir app Shizuku</button>
+  <button class="pick" data-act="checkShz">Verificar novamente</button>
+  <div class="card">
+    <p class="muted">Com o Shizuku ativo, o TurboBoost faz:</p>
+    <p style="margin:8px 0 0">• RAM real, lida do sistema</p>
+    <p style="margin:4px 0">• Encerrar apps em segundo plano</p>
+    <p style="margin:4px 0">• Liberar RAM (fecha apps em segundo plano)</p>
+    <p style="margin:4px 0">• Limpar cache dos apps</p>
+    <p style="margin:4px 0">• Escanear as pastas de cache permitidas</p>
+  </div>`;
+}
+
+function render() {
+  const c = calc();
+  let html = `<h1>N'<span class="n">TurboBoost</span>
+    <span id="hdr" class="hdr" style="color:${colorFor(c.pct)}">${fmt(S.used)} / ${fmt(S.total)}</span></h1>`;
+  html += bannerHtml();
+  if (tab === "home") html += home(c);
+  if (tab === "ram") html += ram(c);
+  if (tab === "cache") html += cache(c);
+  if (tab === "banner") html += bannerTab();
+  if (tab === "profile") html += profileTab();
+  if (tab === "shizuku") html += shizukuTab();
+  const tabs = [["home", "Início", ICON.home], ["ram", "RAM", ICON.ram], ["cache", "Cache", ICON.cache],
+                ["banner", "Banner", ICON.image], ["profile", "Perfil", ICON.user], ["shizuku", "Shizuku", ICON.shield]];
+  html += `<nav>${tabs.map(([id, label, d]) =>
+    `<button data-tab="${id}" class="${tab === id ? "on" : ""}" ${busy && busy !== "scan" ? "disabled" : ""}>${ic(d, 20)}${label}</button>`
+  ).join("")}</nav>`;
+  document.getElementById("app").innerHTML = html;
+  lastKey = S.procs.map(p => p.id).join() + "|" + S.cache.map(x => x.id).join();
+}
+
+function updateLive() {
+  const c = calc(), col = colorFor(c.pct);
+  const put = (id, fn) => { const x = document.getElementById(id); if (x) fn(x); };
+  put("hdr", x => { x.textContent = fmt(S.used) + " / " + fmt(S.total); x.style.color = col; });
+  put("ramHome", x => { x.textContent = (S.used / 1024).toFixed(1) + " GB"; x.style.color = col; });
+  put("cacheHome", x => { x.textContent = fmt(c.cacheTotal); });
+  put("score", x => { x.textContent = c.score + "%"; x.style.color = scoreColor(c.score); });
+  put("scoreBar", x => { x.style.width = c.score + "%"; x.style.background = scoreColor(c.score); });
+  put("pct", x => { x.textContent = c.pct.toFixed(1) + "%"; x.style.color = col; });
+  put("gauge", x => { x.style.strokeDashoffset = CIRC * (1 - c.pct / 100); x.style.stroke = col; });
+  put("usedtxt", x => { x.textContent = (S.used / 1024).toFixed(1) + " GB"; });
+  put("line", x => x.setAttribute("points", pts()));
+  put("area", x => { x.setAttribute("points", `0,130 ${pts()} 300,130`); x.setAttribute("fill", col); });
+  S.procs.forEach(p => put("pm-" + p.id, x => { x.textContent = fmt(p.mb); }));
+}
+
+// ---------- Dados vindos do Kotlin ----------
+function applyStats(d) {
+  if (d.error) {
+    if (shzState === "on" || shzState === "err") {
+      shizukuOn = false;
+      if (shzState !== "err" || shzErr !== d.error) { shzState = "err"; shzErr = d.error; render(); }
+    }
+    if (busy === "scan") { scanned = true; finishBusy(null); }
+    return;
+  }
+  if (shzState !== "on") { shzState = "on"; shizukuOn = true; render(); }
+  shizukuOn = true;
+  S.total = d.total;
+  S.used = d.used;
+  S.procs = d.procs.map(p => ({ id: p.pkg, name: p.name, pkg: p.pkg, mb: p.mb }));
+  S.cache = d.cache.filter(c => c.mb > 0);
+  S.history = [...S.history.slice(1), S.used];
+  if (busy === "scan") {
+    scanned = true;
+    selected = new Set(S.cache.map(c => c.id));
+    finishBusy(null);
+    return;
+  }
+  const key = S.procs.map(p => p.id).join() + "|" + S.cache.map(x => x.id).join();
+  if (key !== lastKey) render(); else updateLive();
+}
+
+window.onStats = applyStats;
+window.onAction = res => finishBusy(res);
+window.onNotice = m => notify(m);
+window.onShizuku = s => {
+  shzState = s;
+  shizukuOn = s === "on";
+  if (s !== "err") shzErr = "";
+  render();
+  if (shizukuOn && NATIVE) Android.stats();
+};
+
+function tick() {
+  if (NATIVE) return;
+  S.procs.forEach(p => { p.mb = clamp(p.mb + rnd(-40, 40), 60, 2000); });
+  S.base = clamp(S.base + rnd(-30, 30), 900, 2600);
+  S.used = S.base + sum(S.procs, p => p.mb);
+  S.history = [...S.history.slice(1), S.used];
+  updateLive();
+}
+setInterval(tick, 1000);
+setInterval(() => { if (NATIVE && !busy && shizukuOn) Android.stats(); }, 2000);
+
+// ---------- Ações ----------
+function act(kind, simMs, nativeFn, simFn) {
+  if (busy) return;
+  if (NATIVE && shizukuOn !== true) { notify("Shizuku não está ativo. Veja a aba Shizuku."); return; }
+  begin(kind);
+  if (NATIVE) nativeFn();
+  else setTimeout(() => finishBusy(simFn()), simMs);
+}
+
+function freeRam() {
+  act("ram", 1800, () => Android.freeRam(), () => {
+    const before = S.used;
+    S.base *= 0.7;
+    S.procs.forEach(p => { p.mb *= 0.8; });
+    S.used = S.base + sum(S.procs, p => p.mb);
+    const freed = before - S.used;
+    return { freed, msg: `RAM liberada: ${fmt(freed)} recuperados` };
+  });
+}
+
+function clean() {
+  act("cache", 2200, () => Android.trimCache(), () => {
+    const ids = new Set(selected);
+    const freed = sum(S.cache.filter(c => ids.has(c.id)), c => c.mb);
+    S.cache = S.cache.filter(c => !ids.has(c.id));
+    return { freed, cleaned: true, msg: `Limpeza concluída: ${fmt(freed)} liberados` };
+  });
+}
+
+function optimize() {
+  act("opt", 3000, () => Android.optimize(), () => {
+    const before = S.used;
+    S.base *= 0.7;
+    S.procs.forEach(p => { p.mb *= 0.8; });
+    S.used = S.base + sum(S.procs, p => p.mb);
+    const ram = before - S.used;
+    const cache = sum(S.cache, c => c.mb);
+    S.cache = [];
+    selected = new Set();
+    scanned = true;
+    const freed = ram + cache;
+    return { freed, cleaned: true, msg: `Otimização concluída: ${fmt(freed)} liberados` };
+  });
+}
+
+function scan() {
+  if (busy) return;
+  scanned = false; cacheDone = null;
+  begin("scan");
+  if (NATIVE) {
+    Android.stats();
+  } else {
+    setTimeout(() => {
+      S.cache = makeSimCache();
+      selected = new Set(S.cache.map(c => c.id));
+      scanned = true;
+      finishBusy(null);
+    }, 1500);
+  }
+}
+
+function kill(id) {
+  if (busy) return;
+  const p = S.procs.find(x => x.id === id);
+  if (!p) return;
+  if (NATIVE) {
+    if (shizukuOn !== true) { notify("Shizuku não está ativo. Veja a aba Shizuku."); return; }
+    Android.forceStop(p.pkg);
+    notify(`${p.name} encerrado`);
+    setTimeout(() => Android.stats(), 800);
+    return;
+  }
+  S.procs = S.procs.filter(x => x.id !== id);
+  S.used = S.base + sum(S.procs, q => q.mb);
+  notify(`${p.name} encerrado · ${fmt(p.mb)} liberados`);
+  render();
+}
+
+function readImage(file, maxSide, cb) {
+  const reader = new FileReader();
+  reader.onload = () => {
+    const img = new Image();
+    img.onload = () => {
+      const s = Math.min(1, maxSide / Math.max(img.width, img.height));
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.round(img.width * s);
+      canvas.height = Math.round(img.height * s);
+      canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
+      cb(canvas.toDataURL("image/jpeg", 0.85));
+    };
+    img.onerror = () => notify("Não foi possível abrir essa imagem");
+    img.src = reader.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+document.addEventListener("click", e => {
+  const t = e.target.closest("[data-tab],[data-act]");
+  if (!t || t.disabled) return;
+  if (t.dataset.tab) {
+    tab = t.dataset.tab;
+    render();
+    if (tab === "cache" && !scanned && !busy) scan();
+    return;
+  }
+  switch (t.dataset.act) {
+    case "opt": optimize(); break;
+    case "ram": freeRam(); break;
+    case "kill": kill(t.dataset.pid); break;
+    case "scan": scan(); break;
+    case "clean": clean(); break;
+    case "pickBanner": document.getElementById("bannerIn").click(); break;
+    case "pickAvatar": document.getElementById("avatarIn").click(); break;
+    case "rmBanner":
+      banner = null; lsSet("tb_banner", null); render();
+      notify("Banner removido");
+      break;
+    case "perm": if (NATIVE) Android.requestPerm(); break;
+    case "openShz": if (NATIVE) Android.openShizuku(); break;
+    case "checkShz":
+      if (NATIVE) { Android.status(); notify("Verificando Shizuku..."); }
+      break;
+  }
+});
+
+document.addEventListener("input", e => {
+  if (e.target.id === "nameIn") {
+    name = e.target.value.slice(0, 30);
+    lsSet("tb_name", name);
+  }
+});
+
+document.addEventListener("change", e => {
+  const el = e.target;
+  if (el.dataset && el.dataset.cb) {
+    if (selected.has(el.dataset.cb)) selected.delete(el.dataset.cb); else selected.add(el.dataset.cb);
+    render();
+    return;
+  }
+  if (el.id === "bannerIn" && el.files && el.files[0]) {
+    readImage(el.files[0], 1280, data => {
+      banner = data; lsSet("tb_banner", data); el.value = "";
+      render(); notify("Banner atualizado");
+    });
+  }
+  if (el.id === "avatarIn" && el.files && el.files[0]) {
+    readImage(el.files[0], 512, data => {
+      avatar = data; lsSet("tb_avatar", data); el.value = "";
+      render(); notify("Foto atualizada");
+    });
+  }
+});
+
+render();
+if (NATIVE) { Android.status(); Android.stats(); }
+} catch (e) {
+  document.getElementById("app").innerHTML = '<p class="err">Erro ao iniciar: ' + e.message + '</p>';
+}
+</script>
+</body>
+</html>
