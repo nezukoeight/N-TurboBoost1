@@ -8,6 +8,8 @@ import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.widget.ScrollView
+import android.widget.TextView
 import androidx.activity.ComponentActivity
 import androidx.activity.result.contract.ActivityResultContracts
 import rikka.shizuku.Shizuku
@@ -25,17 +27,24 @@ class MainActivity : ComponentActivity() {
     }
 
     private val permissionListener = Shizuku.OnRequestPermissionResultListener { code, _ ->
-        if (code == reqCode) bridge.status()
+        if (code == reqCode && ::bridge.isInitialized) bridge.status()
     }
 
     private val binderListener = Shizuku.OnBinderReceivedListener {
         requestPermissionIfNeeded()
-        bridge.status()
+        if (::bridge.isInitialized) bridge.status()
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        try {
+            start()
+        } catch (t: Throwable) {
+            showError(t)
+        }
+    }
 
+    private fun start() {
         web = WebView(this)
         bridge = Bridge(web, this)
         web.setBackgroundColor(Color.BLACK)
@@ -46,7 +55,7 @@ class MainActivity : ComponentActivity() {
             override fun onShowFileChooser(
                 view: WebView?,
                 callback: ValueCallback<Array<Uri>>?,
-                params: WebChromeClient.FileChooserParams?
+                params: FileChooserParams?
             ): Boolean {
                 filePathCallback?.onReceiveValue(null)
                 filePathCallback = callback
@@ -61,6 +70,18 @@ class MainActivity : ComponentActivity() {
         Shizuku.addRequestPermissionResultListener(permissionListener)
         Shizuku.addBinderReceivedListener(binderListener)
         requestPermissionIfNeeded()
+    }
+
+    private fun showError(t: Throwable) {
+        val tv = TextView(this).apply {
+            text = "Erro ao iniciar:\n\n" + t.stackTraceToString()
+            setTextColor(Color.WHITE)
+            setBackgroundColor(Color.BLACK)
+            setPadding(32, 32, 32, 32)
+            textSize = 12f
+            setTextIsSelectable(true)
+        }
+        setContentView(ScrollView(this).apply { addView(tv) })
     }
 
     private fun requestPermissionIfNeeded() {
