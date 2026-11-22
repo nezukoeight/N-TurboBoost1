@@ -6,12 +6,9 @@
         android:label="N'TurboBoost"
         android:theme="@android:style/Theme.DeviceDefault.NoActionBar">
 
-        <meta-data android:name="moe.shizuku.client.V3_SUPPORT" android:value="true" />
-
         <activity
             android:name=".MainActivity"
-            android:exported="true"
-            android:configChanges="orientation|screenSize|keyboardHidden">
+            android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -21,9 +18,15 @@
         <provider
             android:name="rikka.shizuku.ShizukuProvider"
             android:authorities="${applicationId}.shizuku"
-            android:enabled="true"
-            android:exported="false"
+            android:exported="true"
             android:multiprocess="false"
-            android:permission="android.permission.INTERACT_ACROSS_USERS_FULL" />
+            android:enabled="true"
+            android:readPermission="rikka.shizuku.manager.permission.REQUEST_PROVIDER">
+            <meta-data
+                android:name="moe.shizuku.client.V3_SUPPORT"
+                android:value="true" />
+        </provider>
+
     </application>
+
 </manifest>
